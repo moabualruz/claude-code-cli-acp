@@ -3,6 +3,7 @@ use std::io::{Read, Write};
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 use std::thread::{self, JoinHandle};
+use std::time::Duration;
 
 use agent_client_protocol::schema::McpServer;
 use anyhow::{Context, anyhow};
@@ -15,6 +16,17 @@ use crate::terminal::{
     recognizers::{PermissionDecision, PermissionDialog, recognize_permission_dialog},
     screen::TerminalScreen,
 };
+
+// Claude Code 2.1.169 paints the TUI prompt editor lazily after startup.
+const CLAUDE_2_1_169_TUI_SETTLE_DELAY: Duration = Duration::from_millis(2_000);
+// Claude Code 2.1.169 can buffer typed prompt bytes before Enter is accepted.
+const CLAUDE_2_1_169_PRE_ENTER_DELAY: Duration = Duration::from_millis(800);
+// Claude Code 2.1.169 sometimes leaves echoed prompt text idle; retry Enter then.
+const CLAUDE_2_1_169_SUBMIT_RETRY_DELAYS: [Duration; 3] = [
+    Duration::from_millis(1_000),
+    Duration::from_millis(1_500),
+    Duration::from_millis(2_000),
+];
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct ClaudePtyConfig {
@@ -167,9 +179,30 @@ impl ClaudePtySession {
     }
 
     pub fn submit_prompt(&mut self, prompt: &str) -> anyhow::Result<()> {
+        thread::sleep(CLAUDE_2_1_169_TUI_SETTLE_DELAY);
         self.write_bytes(prompt.as_bytes())?;
-        thread::sleep(std::time::Duration::from_millis(100));
-        self.write_bytes(b"\r")
+        thread::sleep(CLAUDE_2_1_169_PRE_ENTER_DELAY);
+        self.write_bytes(b"\r")?;
+        self.retry_submit_if_prompt_still_idle(prompt)
+    }
+
+    fn retry_submit_if_prompt_still_idle(&mut self, prompt: &str) -> anyhow::Result<()> {
+        let Some(needle) = prompt_echo_needle(prompt) else {
+            return Ok(());
+        };
+        for delay in CLAUDE_2_1_169_SUBMIT_RETRY_DELAYS {
+            thread::sleep(delay);
+            let screen_text = self.screen_snapshot()?;
+            if screen_text.contains(&needle)
+                && crate::terminal::recognizers::recognize_screen(&screen_text)
+                    == crate::terminal::recognizers::ScreenStatus::Idle
+            {
+                self.write_bytes(b"\r")?;
+            } else {
+                break;
+            }
+        }
+        Ok(())
     }
 
     pub fn send_exit(&mut self) -> anyhow::Result<()> {
@@ -243,6 +276,39 @@ impl ClaudePtySession {
                 "attached Claude session exited with status {status}"
             ))
         }
+    }
+}
+
+fn prompt_echo_needle(prompt: &str) -> Option<String> {
+    let line = prompt.lines().rev().find(|line| !line.trim().is_empty())?;
+    let trimmed = line.trim();
+    let char_count = trimmed.chars().count();
+    let start = char_count.saturating_sub(48);
+    Some(trimmed.chars().skip(start).collect())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::prompt_echo_needle;
+
+    #[test]
+    fn prompt_echo_needle_uses_last_non_empty_trimmed_line() {
+        assert_eq!(
+            prompt_echo_needle("first line\n\n  final answer  "),
+            Some("final answer".to_string())
+        );
+    }
+
+    #[test]
+    fn prompt_echo_needle_truncates_to_last_48_chars() {
+        let prompt = "1234567890".repeat(6);
+        let expected: String = prompt.chars().skip(12).collect();
+        assert_eq!(prompt_echo_needle(&prompt), Some(expected));
+    }
+
+    #[test]
+    fn prompt_echo_needle_returns_none_for_blank_prompt() {
+        assert_eq!(prompt_echo_needle(" \n\t\n"), None);
     }
 }
 
