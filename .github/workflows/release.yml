@@ -46,7 +46,7 @@ env:
 jobs:
   get-version:
     name: Get version
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, linux, x64, generic]
     outputs:
       version: ${{ steps.get_version.outputs.version }}
       tag_name: ${{ steps.get_version.outputs.tag_name }}
@@ -69,7 +69,7 @@ jobs:
 
   quality:
     name: Release quality gates
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, linux, x64, generic]
     steps:
       - uses: actions/checkout@v6.0.2
 
@@ -84,7 +84,7 @@ jobs:
           node-version: "24"
 
       - name: Install package test tools
-        run: sudo apt-get update && sudo apt-get install -y gettext-base zip unzip
+        run: command -v apt-get >/dev/null || exit 0; sudo apt-get update && sudo apt-get install -y gettext-base zip unzip
 
       - name: Run release gates
         run: |
@@ -110,7 +110,7 @@ jobs:
           - os: macos-14
             target: x86_64-apple-darwin
             binary_extension: ""
-          - os: ubuntu-22.04
+          - os: [self-hosted, linux, x64, generic]
             target: x86_64-unknown-linux-gnu
             binary_extension: ""
           - os: ubuntu-22.04-arm
@@ -191,7 +191,7 @@ jobs:
   npm-packages:
     name: Create NPM packages
     needs: [get-version, build]
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, linux, x64, generic]
     steps:
       - uses: actions/checkout@v6.0.2
 
@@ -202,7 +202,7 @@ jobs:
           registry-url: "https://registry.npmjs.org"
 
       - name: Install packaging tools
-        run: sudo apt-get update && sudo apt-get install -y gettext-base unzip
+        run: command -v apt-get >/dev/null || exit 0; sudo apt-get update && sudo apt-get install -y gettext-base unzip
 
       - name: Download all artifacts
         env:
@@ -232,7 +232,7 @@ jobs:
   create-release:
     name: Create GitHub release
     needs: [get-version, build, npm-packages]
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, linux, x64, generic]
     steps:
       - uses: actions/checkout@v6.0.2
 
@@ -269,7 +269,7 @@ jobs:
     name: Publish NPM packages
     if: inputs.publish_npm && !inputs.draft_release
     needs: [create-release, npm-packages]
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, linux, x64, generic]
     permissions:
       actions: read
       contents: read
@@ -313,7 +313,7 @@ jobs:
     name: Publish crate
     if: inputs.publish_crates && !inputs.draft_release
     needs: create-release
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, linux, x64, generic]
     permissions:
       contents: read
     steps:
