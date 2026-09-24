@@ -287,31 +287,6 @@ fn prompt_echo_needle(prompt: &str) -> Option<String> {
     Some(trimmed.chars().skip(start).collect())
 }
 
-#[cfg(test)]
-mod tests {
-    use super::prompt_echo_needle;
-
-    #[test]
-    fn prompt_echo_needle_uses_last_non_empty_trimmed_line() {
-        assert_eq!(
-            prompt_echo_needle("first line\n\n  final answer  "),
-            Some("final answer".to_string())
-        );
-    }
-
-    #[test]
-    fn prompt_echo_needle_truncates_to_last_48_chars() {
-        let prompt = "1234567890".repeat(6);
-        let expected: String = prompt.chars().skip(12).collect();
-        assert_eq!(prompt_echo_needle(&prompt), Some(expected));
-    }
-
-    #[test]
-    fn prompt_echo_needle_returns_none_for_blank_prompt() {
-        assert_eq!(prompt_echo_needle(" \n\t\n"), None);
-    }
-}
-
 fn write_mcp_config_file(config: &ClaudePtyConfig) -> anyhow::Result<Option<PathBuf>> {
     if config.mcp_servers.is_empty() {
         return Ok(None);
@@ -404,4 +379,29 @@ fn reject_print_mode_args<'a>(args: impl IntoIterator<Item = &'a OsString>) -> a
         }
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::prompt_echo_needle;
+
+    #[test]
+    fn prompt_echo_needle_uses_last_non_empty_trimmed_line() {
+        assert_eq!(
+            prompt_echo_needle("first line\n\n  final answer  "),
+            Some("final answer".to_string())
+        );
+    }
+
+    #[test]
+    fn prompt_echo_needle_truncates_to_last_48_chars() {
+        let prompt = "1234567890".repeat(6);
+        let expected: String = prompt.chars().skip(12).collect();
+        assert_eq!(prompt_echo_needle(&prompt), Some(expected));
+    }
+
+    #[test]
+    fn prompt_echo_needle_returns_none_for_blank_prompt() {
+        assert_eq!(prompt_echo_needle(" \n\t\n"), None);
+    }
 }

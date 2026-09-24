@@ -447,46 +447,6 @@ fn strip_duration_suffix(text: &str) -> &str {
         .unwrap_or(text)
 }
 
-#[cfg(test)]
-mod tests {
-    use super::assistant_text_from_screen;
-
-    #[test]
-    fn assistant_text_from_screen_requires_assistant_line_shape() {
-        let screen = "user typed a marker: ⏺ not assistant\n  ⏺ OK. (1.0s)\n";
-        assert_eq!(assistant_text_from_screen(screen).as_deref(), Some("OK."));
-    }
-
-    #[test]
-    fn assistant_text_from_screen_uses_latest_assistant_line() {
-        let screen = "  ⏺ stale text\n  ⏺ current text\n";
-        assert_eq!(
-            assistant_text_from_screen(screen).as_deref(),
-            Some("current text")
-        );
-    }
-
-    #[test]
-    fn assistant_text_from_screen_preserves_non_duration_parenthetical() {
-        let screen = "  ⏺ use foo (bar) now\n";
-        assert_eq!(
-            assistant_text_from_screen(screen).as_deref(),
-            Some("use foo (bar) now")
-        );
-    }
-
-    #[test]
-    fn assistant_text_from_screen_rejects_marker_inside_non_assistant_line() {
-        let screen = "tool output mentions ⏺ but is not an assistant line\n";
-        assert_eq!(assistant_text_from_screen(screen), None);
-    }
-
-    #[test]
-    fn assistant_text_from_screen_rejects_empty_assistant_line() {
-        assert_eq!(assistant_text_from_screen("⏺   \n"), None);
-    }
-}
-
 fn permission_fingerprint(dialog: &PermissionDialog) -> String {
     format!(
         "{}::{:?}",
@@ -557,5 +517,45 @@ impl ScreenFallback for String {
         } else {
             self
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::assistant_text_from_screen;
+
+    #[test]
+    fn assistant_text_from_screen_requires_assistant_line_shape() {
+        let screen = "user typed a marker: ⏺ not assistant\n  ⏺ OK. (1.0s)\n";
+        assert_eq!(assistant_text_from_screen(screen).as_deref(), Some("OK."));
+    }
+
+    #[test]
+    fn assistant_text_from_screen_uses_latest_assistant_line() {
+        let screen = "  ⏺ stale text\n  ⏺ current text\n";
+        assert_eq!(
+            assistant_text_from_screen(screen).as_deref(),
+            Some("current text")
+        );
+    }
+
+    #[test]
+    fn assistant_text_from_screen_preserves_non_duration_parenthetical() {
+        let screen = "  ⏺ use foo (bar) now\n";
+        assert_eq!(
+            assistant_text_from_screen(screen).as_deref(),
+            Some("use foo (bar) now")
+        );
+    }
+
+    #[test]
+    fn assistant_text_from_screen_rejects_marker_inside_non_assistant_line() {
+        let screen = "tool output mentions ⏺ but is not an assistant line\n";
+        assert_eq!(assistant_text_from_screen(screen), None);
+    }
+
+    #[test]
+    fn assistant_text_from_screen_rejects_empty_assistant_line() {
+        assert_eq!(assistant_text_from_screen("⏺   \n"), None);
     }
 }
